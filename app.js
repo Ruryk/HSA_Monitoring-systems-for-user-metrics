@@ -5,7 +5,7 @@ const app = express();
 const port = 3000;
 
 const MEASUREMENT_ID = 'G-LY3HP15H7J';
-const API_SECRET = '7Ek7PdRPQtKVngPekvJVUg';
+const API_SECRET = '';
 const CLIENT_ID = '323149412';  // Ви можете використовувати будь-який унікальний ID для клієнта
 
 async function getUsdToUahRate() {

@@ -1,27 +1,35 @@
 import express from 'express';
-import axios from 'axios';
+import fetch from 'node-fetch';
+import https from 'https';
+import { randomUUID } from 'node:crypto';
+
+import dotenv from 'dotenv';
+
+const dotenvConfig = dotenv.config().parsed;
 
 const app = express();
+
 const port = 3000;
 
-const MEASUREMENT_ID = 'G-LY3HP15H7J';
-const API_SECRET = '';
-const CLIENT_ID = '323149412';  // Ви можете використовувати будь-який унікальний ID для клієнта
-
-async function getUsdToUahRate() {
+// Function for getting the USD/UAH exchange rate
+const getUsdToUahRate = async () => {
     const url = 'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json';
     try {
-        const response = await axios.get(url);
-        return response.data[0].rate;
+        const response = await fetch(url);
+        const data = await response.json();
+        return data[0].rate;
     } catch (error) {
         console.error('Error fetching exchange rate:', error);
+        return null;
     }
 }
 
-async function sendEventToGa(eventName, eventParams) {
-    const url = `https://google-analytics.com/mp/collect?measurement_id=${MEASUREMENT_ID}&api_secret=${API_SECRET}`;
+// Function for sending data to Google Analytics
+const sendEventToGa = async (eventName, eventParams) => {
+    const url = `https://www.google-analytics.com/mp/collect?measurement_id=${ dotenvConfig.MEASUREMENT_ID }&api_secret=${ dotenvConfig.API_SECRET }`;
+
     const payload = {
-        client_id: CLIENT_ID,
+        client_id: randomUUID(),
         events: [{
             name: eventName,
             params: eventParams
@@ -29,15 +37,33 @@ async function sendEventToGa(eventName, eventParams) {
     };
 
     try {
-        const response = await axios.post(url, payload);
-        console.log('Event sent, status code:', response.status);
+        const response = await fetch(url, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            return new Error(`Failed to send data to Google Analytics: ${ response.statusText }`);
+        }
+
+        const data = await response.json();
+
+        console.log('Google Analytics res data', data);
     } catch (error) {
-        console.error('Error sending event to GA:', error.cause);
+        console.error('Error sending event to GA:', error);
     }
 }
 
-async function trackExchangeRate() {
+// Function for tracking and sending a course
+const trackExchangeRate = async () => {
     const rate = await getUsdToUahRate();
+    if (!rate) {
+        console.error('Error getting usd rates');
+        return;
+    }
     const eventParams = {
         currency: 'UAH',
         exchange_rate: rate,
@@ -46,13 +72,14 @@ async function trackExchangeRate() {
     await sendEventToGa('usd_to_uah_rate', eventParams);
 }
 
-// Запуск серверу та регулярне відправлення даних
+// Launch the server and send data regularly
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Server is running on http://localhost:${ port }`);
 
-    // Виклик функції для початкового запуску
+    // Calling a function for initial startup
     trackExchangeRate();
 
-    // Використання setInterval для запуску кожні 24 години
-    setInterval(trackExchangeRate, 5 * 60 * 1000); // 24 години у мілісекундах
+    // Using setInterval to run every 24 hours
+    // setInterval(trackExchangeRate, 24 * 60 * 60 * 1000); // 24 hours in milliseconds
+    setInterval(trackExchangeRate, 2 * 60 * 1000); // 2 minutes in milliseconds
 });
